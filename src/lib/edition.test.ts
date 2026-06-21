@@ -5,14 +5,24 @@ import { isSaasMode } from "@/lib/auth-config";
 
 describe("edition", () => {
   const prev = process.env.CENTRAL_EDITION;
+  const prevDb = process.env.DATABASE_URL;
 
   afterEach(() => {
     if (prev === undefined) delete process.env.CENTRAL_EDITION;
     else process.env.CENTRAL_EDITION = prev;
+    if (prevDb === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = prevDb;
   });
 
-  it("defaults to control_plane", () => {
+  it("defaults to website when DATABASE_URL is unset", () => {
     delete process.env.CENTRAL_EDITION;
+    delete process.env.DATABASE_URL;
+    assert.equal(getEdition(), "website");
+  });
+
+  it("defaults to control_plane when DATABASE_URL is set", () => {
+    delete process.env.CENTRAL_EDITION;
+    process.env.DATABASE_URL = "postgresql://localhost/central";
     assert.equal(getEdition(), "control_plane");
   });
 

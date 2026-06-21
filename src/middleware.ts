@@ -1,9 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getSessionCookie } from "better-auth/cookies";
 
 function getEdition(): "website" | "control_plane" {
   const v = process.env.CENTRAL_EDITION?.trim().toLowerCase();
   if (v === "website" || v === "marketing") return "website";
+  if (v === "control_plane") return "control_plane";
+  // Vercel marketing deploys often omit DATABASE_URL — treat as website unless configured.
+  if (!process.env.DATABASE_URL?.trim()) return "website";
   return "control_plane";
 }
 
@@ -38,6 +40,22 @@ function isWebsiteBlocked(pathname: string): boolean {
   return false;
 }
 
+/** Lightweight session check — avoid importing better-auth in Edge middleware. */
+function hasSessionCookie(request: NextRequest): boolean {
+  const prefix = process.env.BETTER_AUTH_COOKIE_PREFIX?.trim() || "better-auth";
+  const names = [
+    `${prefix}.session_token`,
+    `__Secure-${prefix}.session_token`,
+    `${prefix}-session_token`,
+    `__Secure-${prefix}-session_token`
+  ];
+  for (const name of names) {
+    const value = request.cookies.get(name)?.value;
+    if (value) return true;
+  }
+  return false;
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const edition = getEdition();
@@ -53,7 +71,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const sessionCookie = getSessionCookie(request);
+  const sessionCookie = hasSessionCookie(request);
 
   if (pathname === "/") {
     if (sessionCookie) {
