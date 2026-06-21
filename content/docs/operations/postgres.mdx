@@ -1,0 +1,31 @@
+---
+title: PostgreSQL (control plane)
+description: Migrations, bootstrap, and schema central for the app database.
+---
+
+## Standard migrate
+
+```bash
+npx prisma migrate deploy
+```
+
+Run `prisma/postgres-grants.sql` as superuser if the app role cannot `CREATE` on `public`.
+
+## Restricted public schema
+
+When `prisma migrate deploy` fails with migration persistence errors:
+
+```bash
+# Use schema=central in DATABASE_URL when supported
+npm run db:bootstrap
+npm run db:apply-patches
+npm run db:verify
+```
+
+## Verify
+
+```bash
+npm run db:verify
+```
+
+Checks connectivity and that the `user` table exists in schema `central` (or `public`).

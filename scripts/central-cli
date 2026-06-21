@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Thin CLI wrapper — delegates to install.sh and helper scripts.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+cmd="${1:-install}"
+shift || true
+case "$cmd" in
+  install)
+    exec bash "$ROOT/scripts/install.sh" "$@"
+    ;;
+  upgrade)
+    exec bash "$ROOT/scripts/central-upgrade.sh" "$@"
+    ;;
+  doctor)
+    exec bash "$ROOT/scripts/central-doctor.sh" "$@"
+    ;;
+  status)
+    exec bash "$ROOT/scripts/central-status.sh" "$@"
+    ;;
+  env)
+    sub="${1:-}"
+    shift || true
+    case "$sub" in
+      init) exec bash "$ROOT/scripts/central-env-init.sh" "$@" ;;
+      *)
+        echo "Usage: central-cli env init" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+  uninstall)
+    exec bash "$ROOT/scripts/central-uninstall.sh" "$@"
+    ;;
+  github-app)
+    exec bash "$ROOT/scripts/github-app.sh" "$@"
+    ;;
+  -h|--help|help)
+    cat <<'EOF'
+Usage:
+  central-cli install [install.sh flags]
+  central-cli upgrade              Pull, migrate, build, restart
+  central-cli doctor               Health checks
+  central-cli status               Edition, URL, service status
+  central-cli env init             Generate .env with secrets
+  central-cli uninstall            Stop services, optional remove
+  central-cli github-app urls|secret|manifest|verify|apply
+EOF
+    exit 0
+    ;;
+  *)
+    echo "Unknown command: $cmd" >&2
+    echo "Usage: central-cli install|upgrade|doctor|status|env|uninstall|github-app" >&2
+    exit 1
+    ;;
+esac

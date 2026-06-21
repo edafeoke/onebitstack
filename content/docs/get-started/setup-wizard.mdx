@@ -1,0 +1,27 @@
+---
+title: Setup wizard
+description: First-run setup for the control plane on your VPS.
+---
+
+The setup wizard at `/setup` is **required** on a fresh control plane install. It walks through health checks, public URL, the first platform admin, and GitHub App configuration.
+
+## Steps
+
+1. **Health** — database and Redis connectivity
+2. **Public URL** — saved to `.env` on the server (auth + webhooks)
+3. **Platform admin** — name, email, password (better-auth)
+4. **GitHub App** — manifest flow or manual credentials → write to `.env`
+5. **Verify** — `central-cli doctor` and restart services
+
+Open signup at `/signup` is disabled until setup completes — use the wizard to create the first admin.
+
+Platform admins can reopen `/setup` in repair mode to re-check services or update GitHub App credentials.
+
+## After setup
+
+```bash
+central-cli doctor
+sudo systemctl restart central-server central-deploy-worker
+```
+
+Sign in at `/login`, add servers, install the GitHub App on your org in Settings, and create a project.

@@ -1,0 +1,45 @@
+---
+title: Deploy the website
+description: Host the public marketing site and docs on Vercel (no control plane).
+---
+
+## Overview
+
+The **website edition** is the public product site: landing page, `/install` instructions, and `/docs`. It does **not** run deployments, store SSH keys, or accept sign-ups.
+
+Users install the **control plane** on their own VPS to manage deployments.
+
+## Vercel setup
+
+1. Import this repository in Vercel.
+2. Set environment variables (Production):
+
+| Variable | Value |
+|----------|--------|
+| `CENTRAL_EDITION` | `website` |
+| `NEXT_PUBLIC_APP_URL` | `https://your-brand.com` |
+| `NEXT_PUBLIC_INSTALL_URL` | Same URL (used in install command copy) |
+| `APP_NAME` | Your product name |
+| `NEXT_PUBLIC_APP_NAME` | Same (client-visible) |
+
+3. Deploy. No PostgreSQL or Redis required for the website edition.
+
+## What is blocked
+
+With `CENTRAL_EDITION=website`, middleware redirects `/dashboard`, `/setup`, `/login`, and `/signup` to `/install`. Deploy and agent API routes return 404.
+
+## Custom domain
+
+Point your domain in Vercel and match `NEXT_PUBLIC_APP_URL` exactly (including `https://`).
+
+## Control plane for users
+
+Your `/install` page and docs should point users to:
+
+```bash
+curl -fsSL https://your-brand.com/install.sh | bash -s -- \
+  --domain central.example.com \
+  --postgres docker
+```
+
+That installs the **control plane** on their VPS — see [Installation](/docs/get-started/installation).

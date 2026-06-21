@@ -1,0 +1,44 @@
+---
+title: Docker install profile
+description: Bundled Postgres, Redis, and optional app stack for control plane installs.
+---
+
+## Database + Redis only (default)
+
+Use `docker-compose.install.yml` for Postgres and Redis while running the app via systemd or PM2 on the host:
+
+```bash
+docker compose -f docker-compose.install.yml up -d
+```
+
+| Service | Purpose |
+|---------|---------|
+| `postgres` | Control plane database (`central` schema via app migrations) |
+| `redis` | BullMQ deploy queue |
+
+## Full stack (`--profile app`)
+
+Run the control plane app and deploy worker in Docker as well:
+
+```bash
+cp .env.production.example .env
+# Set NEXT_PUBLIC_APP_URL, secrets, etc.
+docker compose -f docker-compose.install.yml --profile app up -d --build
+```
+
+| Service | Purpose |
+|---------|---------|
+| `central-server` | Next.js control plane |
+| `central-worker` | BullMQ deploy worker |
+
+The compose file overrides `DATABASE_URL` and `REDIS_URL` to use internal service hostnames.
+
+Default Postgres credentials are for **development only**. Change passwords before production.
+
+Stop services:
+
+```bash
+docker compose -f docker-compose.install.yml --profile app down
+```
+
+External managed Postgres/Redis is supported — set `DATABASE_URL` and `REDIS_URL` in `.env` and use the default profile without `app`.

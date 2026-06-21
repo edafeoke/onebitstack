@@ -1,0 +1,88 @@
+# Bundled Postgres + Redis for self-host installs.
+# Profiles:
+#   default — postgres + redis only
+#   app     — adds central-server + central-worker (full stack)
+#
+#   docker compose -f docker-compose.install.yml up -d
+#   docker compose -f docker-compose.install.yml --profile app up -d
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: central
+      POSTGRES_PASSWORD: central
+      POSTGRES_DB: central
+    ports:
+      - "5432:5432"
+    volumes:
+      - central_pg_install:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U central -d central"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - central_redis_install:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  central-server:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: Dockerfile.control-plane
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      CENTRAL_EDITION: control_plane
+      DATABASE_URL: postgresql://central:central@postgres:5432/central?schema=central
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "${PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3000/api/setup/status || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 60s
+
+  central-worker:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: Dockerfile.control-plane
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://central:central@postgres:5432/central?schema=central
+      REDIS_URL: redis://redis:6379
+    command: ["npm", "run", "worker:deploy"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      central-server:
+        condition: service_started
+
+volumes:
+  central_pg_install:
+  central_redis_install:

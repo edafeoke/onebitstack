@@ -1,0 +1,72 @@
+---
+title: Installation
+description: Install the control plane on your VPS with one command.
+---
+
+## Overview
+
+Your users install the **control plane** on a Linux VPS. The public **website** (landing + docs on Vercel) is separate — see [Deploy the website](/docs/deploy/website).
+
+## Requirements
+
+- **Linux** VPS (Ubuntu 22.04+ recommended) with SSH access
+- **Docker** and **Docker Compose** (for bundled Postgres/Redis)
+- **Node.js 20+** (installed automatically on Debian/Ubuntu by the script)
+- A public **HTTPS** URL pointing at the VPS (for GitHub webhooks)
+
+## Quick install
+
+```bash
+curl -fsSL https://your-brand.com/install.sh | bash -s -- \
+  --domain central.example.com \
+  --database postgresql \
+  --postgres docker
+```
+
+The installer:
+
+- Generates secrets (`BETTER_AUTH_SECRET`, `ENCRYPTION_KEY`)
+- Starts Postgres + Redis via Docker
+- Runs migrations and builds the app
+- Links `central-cli` on PATH
+- Enables systemd services when run as root
+
+Then open **`https://central.example.com/setup`**.
+
+### Flags
+
+| Flag | Description |
+|------|-------------|
+| `--dir PATH` | Install directory (default `~/central-server`) |
+| `--domain HOST` | Public hostname (sets HTTPS URLs in `.env`) |
+| `--url URL` | Full public origin (overrides `--domain`) |
+| `--database postgresql\|sqlite` | Control plane database |
+| `--postgres docker\|external\|skip` | Postgres delivery |
+| `--systemd` / `--no-systemd` | systemd unit install |
+| `--no-interactive` | Scripted installs |
+
+Examples:
+
+```bash
+bash install.sh --domain central.example.com --postgres docker
+central-cli install --database sqlite --sqlite-path ./data/central.db
+central-cli doctor
+```
+
+## Manual install
+
+```bash
+git clone https://github.com/centralstack/central-server.git ~/central-server
+cd ~/central-server
+central-cli env init
+# edit .env — see .env.production.example
+docker compose -f docker-compose.install.yml up -d
+central-cli install --no-clone --no-interactive --postgres skip
+```
+
+## Next steps
+
+- [Setup wizard](/docs/get-started/setup-wizard) — first admin + GitHub App
+- [GitHub App setup](/docs/get-started/github-app)
+- [Environment](/docs/self-host/env)
+- [Docker all-in-one](/docs/self-host/docker)

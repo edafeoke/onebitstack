@@ -1,0 +1,61 @@
+---
+title: VPS operations
+description: SSH user, deploy paths, git, TLS, and failure modes on target servers.
+---
+
+## SSH user and sudo
+
+Deployments run as the configured SSH user. Nginx/Apache steps need root for `/etc/nginx`, `systemctl reload`, etc.
+
+**Option A — passwordless sudo (recommended)** for user `deploy`:
+
+```bash
+sudo visudo -f /etc/sudoers.d/central-deploy
+```
+
+```
+deploy ALL=(ALL) NOPASSWD: /usr/sbin/nginx, /bin/systemctl, /bin/cp, /bin/ln, /bin/rm, /bin/test, /usr/sbin/apachectl, /usr/sbin/a2ensite, /bin/chown, /bin/chmod, /bin/mkdir, /usr/bin/php, /usr/bin/apt-get
+```
+
+Remote scripts use `sudo -n` so a missing sudoers rule fails immediately.
+
+**Project delete** runs cleanup over SSH before removing the project from Central. The shared legacy root `/var/www/app` is never removed wholesale.
+
+## Paths
+
+- **VPS deploy root** (per server, default `/var/www/server`):
+  - `<deployRoot>/apps/<slug>` — application checkout
+  - `<deployRoot>/configs/{nginx,apache,pm2}` — generated configs
+  - `<deployRoot>/data/<slug>/app.db` — persistent SQLite
+  - `<deployRoot>/logs/<slug>/` — PM2 and app logs
+- **Release layout:** `releases/{deploymentId}/` with `current` symlink; `shared/.env` persists across cutovers.
+
+## Git on the VPS
+
+Deploys clone into `releases/{deploymentId}`, then repoint `current`. Rollback repoints `current` to the previous successful release.
+
+Manual recovery:
+
+```bash
+cd /var/www/central-server
+git fetch origin
+git reset --hard origin/main
+```
+
+Do not commit on the server (`next-env.d.ts` changes after every build).
+
+## TLS (Let's Encrypt)
+
+Schedule renewal on each server:
+
+```bash
+# /etc/cron.d/certbot-central (example)
+0 3 * * * root certbot renew --quiet && nginx -s reload
+```
+
+Central stores certificate expiry on the server record; the dashboard **Health** card warns before `SSL_EXPIRY_WARN_DAYS` (default 14).
+
+## Failure modes
+
+- Invalid nginx config marks deployment **failed** after rollback attempt.
+- SSH connectivity uses retries for transient TCP errors.

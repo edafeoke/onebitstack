@@ -1,0 +1,21 @@
+{
+  "name": "central-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Central Server VPS agent — runs deployment jobs from the control plane",
+  "bin": {
+    "central-agent": "./src/cli.ts"
+  },
+  "scripts": {
+    "start": "tsx src/cli.ts run",
+    "pair": "tsx src/cli.ts pair"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "tsx": "^4.22.0",
+    "typescript": "^5.8.3"
+  }
+}

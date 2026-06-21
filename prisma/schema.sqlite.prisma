@@ -1,0 +1,407 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id            String   @id
+  name          String
+  email         String
+  emailVerified Boolean  @default(false)
+  image         String?
+  role          String   @default("user")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sessions              Session[]
+  accounts              Account[]
+  servers               Server[]
+  projects              Project[]
+  organizationMembers   OrganizationMember[]
+
+  @@unique([email])
+  @@map("user")
+}
+
+/// Workspace keyed by GitHub account login (org or personal user).
+model Organization {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  name      String
+  githubId  String?
+  kind      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members       OrganizationMember[]
+  servers       Server[]
+  projects      Project[]
+  installations GitHubAppInstallation[]
+
+  @@index([kind])
+}
+
+model OrganizationMember {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String       @default("member")
+  createdAt      DateTime     @default(now())
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+}
+
+/// GitHub App installation (repos available = installation-scoped API).
+model GitHubAppInstallation {
+  id                String       @id @default(cuid())
+  installationId    String       @unique
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  accountLogin      String
+  accountType       String
+  installerGithubId String?
+  suspended         Boolean      @default(false)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([organizationId])
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+enum WebStack {
+  none
+  nginx
+  apache
+  caddy
+}
+
+model Server {
+  id                   String   @id @default(cuid())
+  userId               String
+  user                 User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId       String
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name                 String
+  host                 String
+  sshUser              String
+  sshPrivateKeyCipher  String
+  sshPrivateKeyIv      String
+  sshPrivateKeyTag     String
+  webStack                 WebStack @default(none)
+  reverseProxyNotes        String   @default("")
+  tlsCertPath              String   @default("")
+  tlsKeyPath               String   @default("")
+  tlsCertNotAfter          DateTime?
+  reverseProxyConfigPath   String   @default("")
+  deployRoot               String   @default("/var/www/server")
+  capabilitiesJson         String   @default("")
+  lastCapabilityProbeAt    DateTime?
+  agentStatus              String   @default("disconnected")
+  agentId                  String?  @unique
+  agentTokenHash           String?
+  agentVersion             String?
+  lastAgentHeartbeatAt     DateTime?
+  agentPairingTokenHash    String?
+  agentPairingExpiresAt    DateTime?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  projects             Project[]
+  provisioningRuns   ProvisioningRun[]
+  agentJobs            AgentJob[]
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([agentStatus])
+}
+
+enum AgentJobStatus {
+  pending
+  claimed
+  running
+  success
+  failed
+  cancelled
+}
+
+model AgentJob {
+  id              String         @id @default(cuid())
+  serverId        String
+  server          Server         @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  deploymentId    String         @unique
+  status          AgentJobStatus @default(pending)
+  scriptCipher    String
+  scriptIv        String
+  scriptTag       String
+  exitCode        Int?
+  claimedAt       DateTime?
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([serverId, status])
+  @@index([createdAt])
+}
+
+model Project {
+  id                    String        @id @default(cuid())
+  userId                String
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organizationId        String
+  organization          Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  serverId              String
+  server                Server        @relation(fields: [serverId], references: [id], onDelete: Restrict)
+  githubInstallationId  String?
+  name                  String
+  repository            String
+  branch                String
+  deploymentPath        String
+  framework             String?
+  runtime               String?
+  domain                String?
+  webServer             String?
+  nginxConfig           String?
+  apacheConfig          String?
+  pm2Config             String?
+  port                  Int?
+  buildCommand          String        @default("")
+  startCommand          String        @default("")
+  restartCommand        String        @default("")
+  infraJson             String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  environments          Environment[]
+  deployments           Deployment[]
+  envVars               ProjectEnvVar[]
+  domains               ProjectDomain[]
+
+  @@index([userId])
+  @@index([organizationId])
+  @@index([serverId])
+  @@index([repository])
+  @@unique([serverId, port])
+}
+
+enum EnvScope {
+  production
+  preview
+  development
+}
+
+model ProjectEnvVar {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  key         String
+  value       String   @default("")
+  scope       EnvScope @default(production)
+  isSecret    Boolean  @default(false)
+  valueCipher String   @default("")
+  valueIv     String   @default("")
+  valueTag    String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([projectId, key, scope])
+  @@index([projectId])
+  @@index([projectId, scope])
+}
+
+model ProjectDomain {
+  id         String   @id @default(cuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  serverId   String
+  hostname   String
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@unique([projectId, hostname])
+  @@unique([hostname, serverId])
+  @@index([projectId])
+  @@index([serverId])
+}
+
+model Environment {
+  id          String       @id @default(cuid())
+  projectId String
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name        String
+  slug        String
+  branch      String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  deployments Deployment[]
+
+  @@unique([projectId, slug])
+  @@index([projectId])
+}
+
+enum DeploymentStatus {
+  queued
+  running
+  success
+  failed
+  cancelled
+}
+
+enum DeploymentTrigger {
+  manual
+  git_push
+  api
+}
+
+enum DeploymentKind {
+  full
+  config_only
+  rollback
+}
+
+model Deployment {
+  id                   String              @id @default(cuid())
+  projectId            String
+  project              Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  environmentId        String
+  environment          Environment         @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+  status               DeploymentStatus    @default(queued)
+  commitHash           String?
+  trigger              DeploymentTrigger
+  kind                 DeploymentKind      @default(full)
+  releasePath          String?
+  assignedPort         Int?
+  parentDeploymentId   String?
+  parentDeployment     Deployment?         @relation("DeploymentRollback", fields: [parentDeploymentId], references: [id], onDelete: SetNull)
+  rollbackChildren     Deployment[]        @relation("DeploymentRollback")
+  startedAt            DateTime?
+  finishedAt           DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  logChunks            DeploymentLogChunk[]
+
+  @@index([projectId])
+  @@index([environmentId])
+  @@index([createdAt])
+  @@index([parentDeploymentId])
+}
+
+model DeploymentLogChunk {
+  id           String     @id @default(cuid())
+  deploymentId String
+  deployment   Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  seq          Int
+  line         String    
+  createdAt    DateTime   @default(now())
+
+  @@unique([deploymentId, seq])
+  @@index([deploymentId, seq])
+}
+
+model WebhookDelivery {
+  id           String   @id @default(cuid())
+  deliveryId   String   @unique
+  eventType    String
+  action       String?
+  processed    Boolean  @default(false)
+  repository   String?
+  branch       String?
+  commitHash   String?
+  projectId    String?
+  deploymentId String?
+  skipReason   String?
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([repository])
+}
+
+model ProvisioningRun {
+  id          String   @id @default(cuid())
+  serverId    String
+  server      Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  status      String   @default("running")
+  startedAt   DateTime @default(now())
+  finishedAt  DateTime?
+  createdAt   DateTime @default(now())
+  logChunks   ProvisioningLogChunk[]
+
+  @@index([serverId])
+  @@index([createdAt])
+}
+
+model ProvisioningLogChunk {
+  id                String          @id @default(cuid())
+  provisioningRunId String
+  provisioningRun   ProvisioningRun @relation(fields: [provisioningRunId], references: [id], onDelete: Cascade)
+  seq               Int
+  line              String         
+  createdAt         DateTime        @default(now())
+
+  @@unique([provisioningRunId, seq])
+  @@index([provisioningRunId, seq])
+}
+
+/// Single-row first-run / repair state for self-host setup wizard.
+model SetupState {
+  id           String    @id @default("default")
+  completedAt  DateTime?
+  adminUserId  String?
+  installVersion String?
+  metadata     Json?
+  updatedAt    DateTime  @updatedAt
+
+  @@map("setup_state")
+}

@@ -1,0 +1,17 @@
+[Unit]
+Description=Central Server deploy worker (BullMQ)
+After=network.target central-server.service docker.service
+Wants=central-server.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=__INSTALL_DIR__
+EnvironmentFile=__INSTALL_DIR__/.env
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/npm run worker:deploy
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

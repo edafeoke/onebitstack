@@ -1,0 +1,71 @@
+---
+title: GitHub App setup
+description: Register and configure the instance GitHub App on your VPS (manifest, CLI, tenant install).
+---
+
+## Overview
+
+Central uses a **GitHub App** on your server for repo access, signed webhooks, and (optionally) GitHub sign-in. This is **instance-level** configuration in `.env` — separate from installing the app on your organization in **Settings**.
+
+Self-host only. SaaS tenants use the host operator's app.
+
+## Quick setup (manifest)
+
+1. Open [`/setup`](/setup) (or **Platform admin → GitHub App setup**).
+2. Click **Create GitHub App on GitHub** — webhook URL, OAuth callback, and permissions are pre-filled.
+3. On GitHub, confirm and create the app.
+4. Copy the generated `.env` block (or download `central-github.env`).
+5. On the VPS:
+
+```bash
+central-cli github-app apply
+# paste the block, then empty line
+central-cli github-app verify
+```
+
+6. Restart the Central app process (PM2, systemd, etc.).
+
+## CLI commands
+
+```bash
+central-cli github-app urls       # webhook + OAuth URLs
+central-cli github-app secret     # generate webhook secret
+central-cli github-app manifest   # manifest JSON + hints
+central-cli github-app verify     # test credentials in .env
+central-cli github-app apply      # merge pasted lines into .env
+```
+
+Or: `npm run setup:github -- urls`
+
+## Required environment variables
+
+| Variable | Description |
+|----------|-------------|
+| `GITHUB_APP_ID` | App ID from GitHub |
+| `GITHUB_APP_CLIENT_ID` | OAuth client ID |
+| `GITHUB_APP_CLIENT_SECRET` | OAuth client secret |
+| `GITHUB_PRIVATE_KEY` | PEM private key (`\n` escapes in one line are OK) |
+| `GITHUB_APP_WEBHOOK_SECRET` | Webhook signing secret |
+| `GITHUB_APP_SLUG` | App slug for install links |
+
+Also set `NEXT_PUBLIC_GITHUB_APP_SLUG` to the same slug for client-side links.
+
+## Tenant install (your org)
+
+After the server is configured:
+
+1. Sign in with **GitHub** (or link GitHub in Settings).
+2. **Settings → GitHub App → Install GitHub App** on your org or user account.
+3. Webhook deliveries should hit `POST /api/github/webhook` with **202**.
+4. Use **Sync installations** if you installed before signing in.
+
+## Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| Verify fails | Check PEM format, clock sync, and `GITHUB_APP_ID` |
+| Webhook 401 | `GITHUB_APP_WEBHOOK_SECRET` must match GitHub App settings |
+| No install link | Set `GITHUB_APP_SLUG` and restart |
+| Manifest expired | Complete manifest flow within one hour |
+
+See [Installation](/docs/get-started/installation) for full VPS install steps.

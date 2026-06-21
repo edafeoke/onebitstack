@@ -1,0 +1,18 @@
+{
+  "title": "Documentation",
+  "pages": [
+    "index",
+    "deploy",
+    "deploy/website",
+    "get-started",
+    "get-started/installation",
+    "get-started/setup-wizard",
+    "get-started/github-app",
+    "operations",
+    "operations/vps",
+    "operations/postgres",
+    "self-host",
+    "self-host/docker",
+    "self-host/env"
+  ]
+}
