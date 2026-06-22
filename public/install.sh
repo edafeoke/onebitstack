@@ -2,7 +2,9 @@
 # Central Server installer — curl-friendly, upgrade-by-default.
 set -euo pipefail
 
-REPO_URL="${CENTRAL_REPO_URL:-https://github.com/centralstack/central-server.git}"
+DEFAULT_REPO_URL="https://github.com/edafeoke/onebitstack.git"
+LEGACY_REPO_URL="https://github.com/centralstack/central-server.git"
+REPO_URL="${CENTRAL_REPO_URL:-$DEFAULT_REPO_URL}"
 INSTALL_DIR="${CENTRAL_INSTALL_DIR:-$HOME/central-server}"
 DATABASE_TYPE=""
 POSTGRES_MODE=""
@@ -78,6 +80,36 @@ rand_secret() {
   fi
 }
 
+maybe_migrate_origin() {
+  local current
+  current=$(git remote get-url origin 2>/dev/null || true)
+  if [[ "$current" == *"centralstack/central-server"* ]]; then
+    echo "Migrating git remote from legacy centralstack/central-server → $REPO_URL"
+    git remote set-url origin "$REPO_URL"
+  fi
+}
+
+resolve_prisma_schema() {
+  local provider="${1:-postgresql}"
+  if [[ "$provider" == "sqlite" ]]; then
+    if [[ -f prisma/schema.sqlite.prisma ]]; then
+      echo "prisma/schema.sqlite.prisma"
+    elif [[ -f prisma/schema.prisma ]]; then
+      echo "prisma/schema.prisma"
+    else
+      echo "ERROR: no SQLite Prisma schema found under prisma/" >&2
+      exit 1
+    fi
+  elif [[ -f prisma/schema.postgresql.prisma ]]; then
+    echo "prisma/schema.postgresql.prisma"
+  elif [[ -f prisma/schema.prisma ]]; then
+    echo "prisma/schema.prisma"
+  else
+    echo "ERROR: no PostgreSQL Prisma schema found under prisma/" >&2
+    exit 1
+  fi
+}
+
 ensure_node() {
   if command -v node >/dev/null; then
     local major
@@ -121,7 +153,12 @@ elif [[ -d "$INSTALL_DIR/.git" ]]; then
   UPGRADE=1
   echo "Upgrading existing install at $INSTALL_DIR"
   cd "$INSTALL_DIR"
-  git pull --ff-only
+  maybe_migrate_origin
+  git fetch origin
+  if ! git pull --ff-only; then
+    echo "Install tree diverged from origin — resetting to origin/main (local changes in $INSTALL_DIR discarded)…"
+    git reset --hard origin/main
+  fi
 else
   echo "Cloning $REPO_URL into $INSTALL_DIR"
   git clone "$REPO_URL" "$INSTALL_DIR"
@@ -380,8 +417,15 @@ else
         env_set DATABASE_URL 'postgresql://central:central@127.0.0.1:5432/central?schema=central'
         grep -q '^REDIS_URL=' .env 2>/dev/null || env_set REDIS_URL 'redis://127.0.0.1:6379'
       else
-        echo "Docker not found — writing default DATABASE_URL to .env." >&2
-        grep -q '^DATABASE_URL=' .env 2>/dev/null || env_set DATABASE_URL 'postgresql://central:central@127.0.0.1:5432/central?schema=central'
+        echo "Docker not found — falling back to SQLite for local trial install." >&2
+        DATABASE_TYPE=sqlite
+        env_set CENTRAL_DATABASE_PROVIDER sqlite
+        export CENTRAL_DATABASE_PROVIDER=sqlite
+        db_dir=$(dirname "$SQLITE_PATH")
+        mkdir -p "$db_dir"
+        sqlite_url="file:${SQLITE_PATH}"
+        env_set DATABASE_URL "$sqlite_url"
+        export DATABASE_URL="$sqlite_url"
       fi
       load_env
       ;;
@@ -418,11 +462,13 @@ if [[ "$DATABASE_TYPE" == "sqlite" ]]; then
   export CENTRAL_DATABASE_PROVIDER=sqlite
   db_url="$(env_get DATABASE_URL || true)"
   export DATABASE_URL="${db_url:-file:${SQLITE_PATH}}"
-  npx prisma db push --schema prisma/schema.sqlite.prisma
+  sqlite_schema="$(resolve_prisma_schema sqlite)"
+  npx prisma db push --schema "$sqlite_schema"
 else
   export CENTRAL_DATABASE_PROVIDER=postgresql
+  postgres_schema="$(resolve_prisma_schema postgresql)"
   set +e
-  npx prisma migrate deploy --schema prisma/schema.postgresql.prisma
+  npx prisma migrate deploy --schema "$postgres_schema"
   migrate_status=$?
   set -e
   if [[ $migrate_status -ne 0 ]]; then

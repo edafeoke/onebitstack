@@ -62,7 +62,7 @@ curl -fsSL https://your-brand.com/install.sh | bash -s -- \
 Or for local development:
 
 ```bash
-git clone https://github.com/centralstack/central-server.git
+git clone https://github.com/edafeoke/onebitstack.git
 cd central-server
 cp .env.production.example .env
 docker compose -f docker-compose.install.yml up -d
