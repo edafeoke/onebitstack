@@ -4,12 +4,11 @@ function getEdition(): "website" | "control_plane" {
   const v = process.env.CENTRAL_EDITION?.trim().toLowerCase();
   if (v === "website" || v === "marketing") return "website";
   if (v === "control_plane") return "control_plane";
-  // Vercel marketing deploys often omit DATABASE_URL — treat as website unless configured.
   if (!process.env.DATABASE_URL?.trim()) return "website";
   return "control_plane";
 }
 
-const WEBSITE_ALLOWED_PREFIXES = ["/", "/docs", "/install", "/install.sh", "/api/search", "/_next", "/favicon"];
+const WEBSITE_ALLOWED_PREFIXES = ["/docs", "/install", "/install.sh", "/api/search", "/_next", "/favicon"];
 
 const WEBSITE_BLOCKED_PREFIXES = [
   "/dashboard",
@@ -26,7 +25,7 @@ const WEBSITE_BLOCKED_PREFIXES = [
 function isWebsiteAllowed(pathname: string): boolean {
   if (pathname === "/") return true;
   for (const prefix of WEBSITE_ALLOWED_PREFIXES) {
-    if (prefix !== "/" && pathname.startsWith(prefix)) return true;
+    if (pathname.startsWith(prefix)) return true;
   }
   if (/\.(ico|png|jpg|jpeg|svg|webp|css|js|woff2?)$/.test(pathname)) return true;
   return false;
@@ -40,7 +39,6 @@ function isWebsiteBlocked(pathname: string): boolean {
   return false;
 }
 
-/** Lightweight session check — avoid importing better-auth in Edge middleware. */
 function hasSessionCookie(request: NextRequest): boolean {
   const prefix = process.env.BETTER_AUTH_COOKIE_PREFIX?.trim() || "better-auth";
   const names = [
@@ -56,7 +54,7 @@ function hasSessionCookie(request: NextRequest): boolean {
   return false;
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const edition = getEdition();
 
@@ -94,13 +92,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/",
-    "/dashboard/:path*",
-    "/setup/:path*",
-    "/login",
-    "/signup",
-    "/install",
-    "/docs/:path*",
-    "/api/:path*"
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff2?)$).*)"
   ]
 };
